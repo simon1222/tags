@@ -64,4 +64,9 @@ class TagSerializer extends AbstractSerializer
     {
         return $this->hasOne($tag, DiscussionSerializer::class);
     }
+
+    protected function children($tag)
+    {
+        return $this->hasMany($tag, self::class);
+    }
 }

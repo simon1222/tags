@@ -12,12 +12,13 @@ namespace Flarum\Tags\Content;
 use Flarum\Api\Client;
 use Flarum\Api\Controller\ListDiscussionsController;
 use Flarum\Frontend\Document;
+use Flarum\Tags\Api\Controller\ShowTagController;
 use Flarum\Tags\TagRepository;
 use Flarum\User\User;
-use Illuminate\Contracts\Translation\Translator;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Support\Arr;
 use Psr\Http\Message\ServerRequestInterface as Request;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 class Tag
 {
@@ -37,6 +38,11 @@ class Tag
     protected $tags;
 
     /**
+     * @var TranslatorInterface
+     */
+    protected $translator;
+
+    /**
      * @var Translator
      */
     protected $translator;
@@ -45,9 +51,9 @@ class Tag
      * @param Client $api
      * @param Factory $view
      * @param TagRepository $tags
-     * @param Translator $translator
+     * @param TranslatorInterface $translator
      */
-    public function __construct(Client $api, Factory $view, TagRepository $tags, Translator $translator)
+    public function __construct(Client $api, Factory $view, TagRepository $tags, TranslatorInterface $translator)
     {
         $this->api = $api;
         $this->view = $view;
@@ -73,12 +79,19 @@ class Tag
         $params = [
             'sort' => $sort && isset($sortMap[$sort]) ? $sortMap[$sort] : '',
             'filter' => [
-                'q' => "$q tag:$slug"
+                'tag' => "$slug"
             ],
             'page' => ['offset' => ($page - 1) * 20, 'limit' => 20]
         ];
 
         $apiDocument = $this->getApiDocument($actor, $params);
+
+        $tagsDocument = $this->getTagsDocument($actor, $slug);
+
+        $apiDocument->included[] = $tagsDocument->data;
+        foreach ((array) $tagsDocument->included as $tag) {
+            $apiDocument->included[] = $tag;
+        }
 
         $document->title = $tag->name;
         if ($tag->description) {
@@ -117,5 +130,13 @@ class Tag
     private function getApiDocument(User $actor, array $params)
     {
         return json_decode($this->api->send(ListDiscussionsController::class, $actor, $params)->getBody());
+    }
+
+    private function getTagsDocument(User $actor, string $slug)
+    {
+        return json_decode($this->api->send(ShowTagController::class, $actor, [
+            'slug' => $slug,
+            'include' => 'children,children.parent,parent,parent.children.parent,state'
+        ])->getBody());
     }
 }
